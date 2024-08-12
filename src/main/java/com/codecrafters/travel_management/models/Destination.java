@@ -25,7 +25,7 @@ public class Destination {
     @Column(nullable = false)
     private String country;
 
-    @OneToMany(mappedBy = "destination", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "destination", cascade = CascadeType.ALL)
     @JsonManagedReference
     private List<Trip> trips;
 }
