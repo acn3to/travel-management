@@ -7,6 +7,7 @@ import com.codecrafters.travel_management.services.DestinationService;
 import com.codecrafters.travel_management.services.TripService;
 import com.codecrafters.travel_management.mappers.DestinationMapper;
 import com.codecrafters.travel_management.mappers.TripMapper;
+import com.codecrafters.travel_management.exceptions.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,7 +39,7 @@ public class DestinationController {
             List<DestinationDTO> destinationDTOs = destinationService.getAllDestinations().stream().map(destinationMapper::toDTO).toList();
             return ResponseEntity.ok(destinationDTOs);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new RuntimeException("Failed to fetch destinations", e);
         }
     }
 
@@ -46,9 +47,14 @@ public class DestinationController {
     public ResponseEntity<DestinationDTO> getDestinationById(@PathVariable Long id) {
         try {
             Optional<Destination> destination = destinationService.getDestinationById(id);
-            return destination.map(destinationMapper::toDTO).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+            if (destination.isEmpty()) {
+                throw new DestinationNotFoundException(id);
+            }
+            return ResponseEntity.ok(destinationMapper.toDTO(destination.get()));
+        } catch (DestinationNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new RuntimeException("Failed to fetch destination", e);
         }
     }
 
@@ -58,9 +64,9 @@ public class DestinationController {
             List<TripDTO> tripDTOs = tripService.getTripsByDestinationId(destinationId).stream().map(tripMapper::toDTO).toList();
             return ResponseEntity.ok(tripDTOs);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new DestinationNotFoundException(destinationId);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new RuntimeException("Failed to fetch trips for destination", e);
         }
     }
 
@@ -72,7 +78,7 @@ public class DestinationController {
             DestinationDTO createdDTO = destinationMapper.toDTO(createdDestination);
             return ResponseEntity.status(HttpStatus.CREATED).body(createdDTO);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new DestinationCreationException("Failed to create destination", e);
         }
     }
 
@@ -80,9 +86,8 @@ public class DestinationController {
     public ResponseEntity<DestinationDTO> updateDestination(@PathVariable Long id, @RequestBody DestinationDTO destinationDTO) {
         try {
             Optional<Destination> existingDestinationOpt = destinationService.getDestinationById(id);
-
             if (existingDestinationOpt.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                throw new DestinationNotFoundException(id);
             }
 
             Destination updatedDestination = destinationMapper.toEntity(destinationDTO);
@@ -91,8 +96,10 @@ public class DestinationController {
             Destination savedDestination = destinationService.updateDestination(id, updatedDestination);
             DestinationDTO updatedDTO = destinationMapper.toDTO(savedDestination);
             return ResponseEntity.ok(updatedDTO);
+        } catch (DestinationNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new DestinationUpdateException("Failed to update destination", e);
         }
     }
 
@@ -102,9 +109,9 @@ public class DestinationController {
             destinationService.deleteDestination(id);
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new DestinationDeletionException("Failed to delete destination", e);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new RuntimeException("Failed to delete destination", e);
         }
     }
 }

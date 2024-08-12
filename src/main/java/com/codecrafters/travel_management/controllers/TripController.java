@@ -6,6 +6,7 @@ import com.codecrafters.travel_management.models.Trip;
 import com.codecrafters.travel_management.services.DestinationService;
 import com.codecrafters.travel_management.services.TripService;
 import com.codecrafters.travel_management.mappers.TripMapper;
+import com.codecrafters.travel_management.exceptions.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,7 +36,7 @@ public class TripController {
             List<TripDTO> tripDTOs = tripService.getAllTrips().stream().map(tripMapper::toDTO).toList();
             return ResponseEntity.ok(tripDTOs);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new RuntimeException("Failed to fetch trips", e);
         }
     }
 
@@ -43,9 +44,14 @@ public class TripController {
     public ResponseEntity<TripDTO> getTripById(@PathVariable Long id) {
         try {
             Optional<Trip> trip = tripService.getTripById(id);
-            return trip.map(tripMapper::toDTO).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+            if (trip.isEmpty()) {
+                throw new TripNotFoundException(id);
+            }
+            return ResponseEntity.ok(tripMapper.toDTO(trip.get()));
+        } catch (TripNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new RuntimeException("Failed to fetch trip", e);
         }
     }
 
@@ -55,7 +61,7 @@ public class TripController {
             Optional<Destination> destination = destinationService.getDestinationById(tripDTO.destinationId());
 
             if (destination.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                throw new DestinationNotFoundException(tripDTO.destinationId());
             }
 
             Trip trip = tripMapper.toEntity(tripDTO);
@@ -64,8 +70,10 @@ public class TripController {
             Trip createdTrip = tripService.createTrip(trip);
             TripDTO createdDTO = tripMapper.toDTO(createdTrip);
             return ResponseEntity.status(HttpStatus.CREATED).body(createdDTO);
+        } catch (DestinationNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new TripCreationException("Failed to create trip", e);
         }
     }
 
@@ -73,15 +81,13 @@ public class TripController {
     public ResponseEntity<TripDTO> updateTrip(@PathVariable Long id, @RequestBody TripDTO tripDTO) {
         try {
             Optional<Trip> existingTripOpt = tripService.getTripById(id);
-
             if (existingTripOpt.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                throw new TripNotFoundException(id);
             }
 
             Optional<Destination> destination = destinationService.getDestinationById(tripDTO.destinationId());
-
             if (destination.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                throw new DestinationNotFoundException(tripDTO.destinationId());
             }
 
             Trip updatedTrip = tripMapper.toEntity(tripDTO);
@@ -91,8 +97,10 @@ public class TripController {
             Trip savedTrip = tripService.updateTrip(id, updatedTrip);
             TripDTO updatedDTO = tripMapper.toDTO(savedTrip);
             return ResponseEntity.ok(updatedDTO);
+        } catch (TripNotFoundException | DestinationNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new TripUpdateException("Failed to update trip", e);
         }
     }
 
@@ -102,9 +110,9 @@ public class TripController {
             tripService.deleteTrip(id);
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new TripDeletionException("Failed to delete trip", e);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new RuntimeException("Failed to delete trip", e);
         }
     }
 }
